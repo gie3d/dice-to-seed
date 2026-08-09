@@ -127,10 +127,32 @@ startup network probe. Only use it if you accept the risk that the probe
 could be wrong in the other direction too (i.e. you could in fact be
 online and this flag would let the script run anyway).
 
-You'll be asked how many rolls you'll provide (50 or 100), then to type
-them in as a string of digits 1–6 (spaces optional, e.g.
-`3 1 6 2 5 4 ...` or `316254...`). The mnemonic is printed once, to your
-terminal only.
+You'll be asked how many rolls you'll provide (50 or 100). Then, in a real
+terminal, a live grid appears and tracks your progress one roll at a time:
+
+```
+Roll 37 of 50 — type the die face (1-6).
+
+   1-10: 3 1 6 2 5 4 3 2 1 6
+  11-20: 2 4 1 5 3 6 2 1 4 3
+  21-30: 5 6 1 2 4 3 6 5 1 2
+  31-40: 4 3 · · · · · · · ·
+  41-50: · · · · · · · · · ·
+```
+
+Just type each digit as you roll it — no need to press Enter between
+rolls. The grid always shows exactly which roll you're on and everything
+entered so far, so it's easy to keep your place through a long sequence
+and to visually double-check it before committing. Backspace corrects
+the most recent roll; once all of them are entered, press Enter to
+confirm (or keep using Backspace to fix something first). Ctrl+C cancels
+at any point.
+
+(If stdin isn't a real terminal — e.g. you're piping input from a script
+or test — the grid is skipped and rolls are instead read as one line of
+digits, same as before.)
+
+The mnemonic is printed once, to your terminal only.
 
 ## Best practices for generating a real seed
 
