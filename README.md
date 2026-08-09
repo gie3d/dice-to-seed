@@ -55,9 +55,21 @@ BIP-39-checksummed word list, correctly, and do nothing else.
   (`2f5eed53a4727b4bf8880d8f3f199efc90e58503646d9ff8eff3a2ed3b24dbda`)
   rather than retyped by hand, to remove transcription risk. See the
   header comment in that file.
-- **Every line is commented** in `dice-to-seed.js`, explaining what it
-  does and why — so you (or anyone you trust) can read the entire
-  implementation and verify it does only what this README says.
+- **Every line is commented**, explaining what it does and why — so you
+  (or anyone you trust) can read the entire implementation and verify
+  it does only what this README says.
+
+## Files
+
+```
+dice-to-seed.js       Entry point: command-line dispatch, wires the pieces below together.
+lib/mnemonic.js       Core conversion: dice digits -> entropy -> BIP-39 mnemonic.
+lib/validate.js       Dice-input validation (reject and re-prompt, never "fix").
+lib/connectivity.js   Offline check — the only networking code in this program.
+lib/cli.js            Interactive prompt flow (readline-based).
+lib/selftest.js       Offline self-test against official BIP-39 test vectors.
+wordlist.js           The official 2048-word BIP-39 English wordlist.
+```
 
 ## How it works
 
@@ -146,8 +158,9 @@ real funds. None of this is enforced by the script — it's on you.
   practical, at minimum use a machine you trust and have kept patched,
   and close every other application first.
 - **Read the source first**, or have someone you trust read it — every
-  line in `dice-to-seed.js` is commented specifically so this is
-  practical to do yourself rather than take on faith. Run
+  line across `dice-to-seed.js` and `lib/` is commented specifically so
+  this is practical to do yourself rather than take on faith (see
+  [Files](#files) above for what lives where). Run
   `node dice-to-seed.js --selftest` and confirm `8/8 checks passed.`
   before entering real dice rolls.
 
