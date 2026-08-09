@@ -16,16 +16,25 @@
  *
  * SECURITY / PRIVACY NOTES
  * -------------------------
- * - Zero external dependencies. Only Node's built-in `crypto` and
- *   `readline` modules are used (both ship with Node itself; nothing
- *   is installed from npm). See ./wordlist.js for the embedded BIP-39
- *   English wordlist, sourced and hash-verified from the official
- *   bitcoin/bips repository (see that file's header comment).
- * - No networking code exists anywhere in this program: it never
- *   imports 'http', 'https', 'net', 'dns', or 'tls', so it has no
- *   mechanism to reach the network even accidentally. For maximum
- *   assurance, physically disconnect/disable networking on the
- *   machine before running this.
+ * - Zero external dependencies. Only Node's built-in `crypto`,
+ *   `readline`, and `net` modules are used (all ship with Node itself;
+ *   nothing is installed from npm). See ./wordlist.js for the embedded
+ *   BIP-39 English wordlist, sourced and hash-verified from the
+ *   official bitcoin/bips repository (see that file's header comment).
+ * - The only networking code in this program is an outbound-connection
+ *   *probe*, run once at startup, before any dice input is requested,
+ *   to confirm the machine is actually offline (see
+ *   checkInternetConnection() below). It opens plain TCP connections to
+ *   two well-known IPs (1.1.1.1 and 8.8.8.8, port 443) and immediately
+ *   discards them — no data is sent beyond the TCP handshake, and
+ *   nothing related to dice input or the mnemonic ever touches this
+ *   code path (it hasn't been collected yet when the probe runs). If
+ *   either connection succeeds, the program refuses to continue. This
+ *   is a best-effort convenience check, not a guarantee: a machine
+ *   behind a filtered network could still be online while both probes
+ *   fail. For maximum assurance, physically disconnect/disable
+ *   networking on the machine before running this, rather than relying
+ *   on this check alone.
  * - Nothing is written to disk, logged, or transmitted anywhere.
  *   Output goes only to your terminal (stdout). Your dice input is
  *   read from stdin and is not written to any file or shell history
@@ -56,12 +65,23 @@
  * Run `node dice-to-seed.js --selftest` to verify this implementation
  * against official BIP-39 test vectors (entropy -> mnemonic), entirely
  * offline, before you trust it with real dice rolls.
+ *
+ * FLAGS
+ * -----
+ * --selftest              Run the self-test above instead of the interactive flow.
+ * --ignore-internet-check Skip the startup connectivity probe (see checkInternetConnection()
+ *                          below) and proceed even if the machine may be online. Only use
+ *                          this if you've confirmed offline status some other way (e.g. you
+ *                          trust your own network disconnection) and accept the risk of the
+ *                          probe being wrong.
  */
 
 // Node's built-in cryptography module (ships with Node, not npm) — used only for its SHA-256 hash function.
 const crypto = require("node:crypto");
 // Node's built-in module for reading lines of text from stdin — used to prompt the user interactively.
 const readline = require("node:readline");
+// Node's built-in networking module — used only for the outbound connectivity probe described above.
+const net = require("node:net");
 // Loads the local 2048-word official BIP-39 English wordlist (see wordlist.js) as a plain array of strings.
 const WORDLIST = require("./wordlist.js");
 
@@ -204,6 +224,50 @@ function parseDiceInput(raw, expectedCount) {
 }
 
 // ---------------------------------------------------------------------
+// Offline check — refuses to run if a network connection is detected
+// ---------------------------------------------------------------------
+
+// Attempts a raw TCP connection to a single host:port and resolves true/false depending on whether it
+// connects before `timeoutMs` elapses. Never sends any data — the socket is destroyed the instant the
+// outcome (connect, timeout, or error) is known.
+function probeHost(host, port, timeoutMs) {
+  return new Promise((resolve) => {
+    // Starts an outbound TCP connection attempt to a fixed IP address (no DNS lookup involved).
+    const socket = net.createConnection({ host, port });
+    // Guards against calling `resolve` more than once (connect/timeout/error could otherwise race).
+    let settled = false;
+    // Shared cleanup: destroys the socket and resolves the promise exactly once.
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      socket.destroy();
+      resolve(result);
+    };
+    // Caps how long we wait for a handshake before treating the host as unreachable.
+    socket.setTimeout(timeoutMs);
+    // A completed TCP handshake means this host is reachable, i.e. the machine is online.
+    socket.once("connect", () => finish(true));
+    // No response within timeoutMs — treat as unreachable.
+    socket.once("timeout", () => finish(false));
+    // Connection refused, network unreachable, etc. — treat as unreachable.
+    socket.once("error", () => finish(false));
+  });
+}
+
+// Best-effort check for whether this machine currently has a working internet connection. Probes two
+// well-known, independently-operated IPs in parallel (Cloudflare and Google public DNS, port 443) so a
+// single provider outage or block doesn't produce a false "offline" reading. Returns true if either
+// probe succeeds. This cannot prove the machine is offline (a sufficiently filtered network could block
+// both probes while other traffic still gets through) — see the header comment for that caveat.
+async function checkInternetConnection(timeoutMs = 3000) {
+  const results = await Promise.all([
+    probeHost("1.1.1.1", 443, timeoutMs),
+    probeHost("8.8.8.8", 443, timeoutMs),
+  ]);
+  return results.some(Boolean);
+}
+
+// ---------------------------------------------------------------------
 // Interactive CLI
 // ---------------------------------------------------------------------
 
@@ -245,18 +309,28 @@ async function ask(nextLine, prompt) {
 }
 
 // Entry point for interactive use: walks the user through entering dice rolls and prints the mnemonic.
-async function main() {
+// `connectivityCheckSkipped` is true only when the caller bypassed checkInternetConnection() because the
+// user passed --ignore-internet-check, and only changes the banner text below — it has no other effect.
+async function main(connectivityCheckSkipped) {
   // Prints a visual divider line of 70 '=' characters.
   console.log("=".repeat(70));
   // Prints the program's title/banner.
   console.log("dice-to-seed: offline BIP-39 mnemonic generator from dice rolls");
   // Prints a matching divider line below the title.
   console.log("=".repeat(70));
-  // A safety reminder shown before any input is requested.
-  console.log(
-    "This program makes no network connections. For maximum assurance,\n" +
-      "disconnect this machine from all networks before continuing.\n"
-  );
+  // A safety reminder shown before any input is requested, reflecting whether the connectivity probe
+  // actually ran (see checkInternetConnection() and run() above/below) or was explicitly bypassed.
+  if (connectivityCheckSkipped) {
+    console.log(
+      "Internet connectivity check was skipped (--ignore-internet-check). You\n" +
+        "have asserted this machine is offline and accepted the risk if it is not.\n"
+    );
+  } else {
+    console.log(
+      "No internet connection was detected. For maximum assurance, physically\n" +
+        "disconnect this machine from all networks before continuing.\n"
+    );
+  }
 
   // Creates a readline interface bound to the process's actual stdin/stdout streams.
   const readlineInterface = readline.createInterface({
@@ -438,6 +512,37 @@ function selfTest() {
   process.exit(passedChecks === totalChecks ? 0 : 1);
 }
 
+// Runs the pre-flight connectivity check (unless explicitly bypassed), then either refuses to continue
+// (if online) or hands off to the normal interactive flow. Kept separate from main() so the network
+// probe always runs first and unconditionally — before any dice input is ever requested — whenever it
+// runs at all.
+async function run(skipInternetCheck) {
+  // --ignore-internet-check bypasses the probe entirely: the user is asserting the machine is offline
+  // and accepting the risk if that assertion is wrong. Nothing is probed or announced here in that case;
+  // main() below shows a one-line reminder of the bypass instead.
+  if (!skipInternetCheck) {
+    // Best-effort check for a working internet connection (see checkInternetConnection() above).
+    const isOnline = await checkInternetConnection();
+    if (isOnline) {
+      // Refuse to proceed: this tool is meant to be run air-gapped. Announce why and stop here —
+      // no dice-roll prompt, no entropy generation, nothing else happens.
+      console.log(
+        "Internet connection detected. For your safety, this program will not run\n" +
+          "while the machine appears to be online.\n\n" +
+          "Disconnect Wi-Fi/Ethernet/Bluetooth (or use airplane mode / an air-gapped\n" +
+          "machine), then run this again. If you understand the risk and want to\n" +
+          "proceed anyway, re-run with --ignore-internet-check."
+      );
+      // Signal failure to the shell without treating it as a crash.
+      process.exitCode = 1;
+      return;
+    }
+  }
+  // No connectivity detected (or the check was explicitly skipped) — proceed with the normal
+  // interactive dice-to-mnemonic flow.
+  await main(skipInternetCheck);
+}
+
 // True only when this file is run directly (e.g. `node dice-to-seed.js`), not when it's `require()`'d
 // as a module from another file (as the self-test's own exports are, and as a future test file might).
 if (require.main === module) {
@@ -446,8 +551,10 @@ if (require.main === module) {
     // Run the offline verification suite instead of the interactive prompt.
     selfTest();
   } else {
-    // No special flag — run the normal interactive dice-to-mnemonic flow.
-    main();
+    // Checks whether the user explicitly opted to bypass the connectivity check, accepting the risk.
+    const skipInternetCheck = process.argv.includes("--ignore-internet-check");
+    // Run the connectivity check first (unless bypassed), then the interactive flow.
+    run(skipInternetCheck);
   }
 }
 

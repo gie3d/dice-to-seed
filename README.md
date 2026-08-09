@@ -28,12 +28,19 @@ BIP-39-checksummed word list, correctly, and do nothing else.
 
 - **Zero dependencies.** No `npm install`, no `package.json`, no
   `node_modules`. The only modules used are Node's own built-ins:
-  `crypto` (for SHA-256, part of the BIP-39 checksum) and `readline`
-  (to prompt you interactively). Nothing is fetched from the internet
-  at install time or run time.
-- **No networking code exists in the program.** It never imports
-  `http`, `https`, `net`, `dns`, or `tls` — there is no code path by
-  which it could reach a network, accidentally or otherwise.
+  `crypto` (for SHA-256, part of the BIP-39 checksum), `readline` (to
+  prompt you interactively), and `net` (only for the offline check
+  below). Nothing is fetched from the internet at install time.
+- **Refuses to run if it detects an internet connection.** Before
+  asking for any dice input, the script probes two well-known IPs
+  (Cloudflare's `1.1.1.1` and Google's `8.8.8.8`, port 443) with a bare
+  TCP handshake — no data is sent, nothing about your dice rolls or the
+  mnemonic exists yet at this point. If either probe succeeds, it
+  prints a warning and exits without proceeding. This is the *only*
+  networking code in the program, and it is best-effort: a filtered
+  network could in principle block both probes while other traffic
+  still gets through, so it's a convenience backstop, not a substitute
+  for physically disconnecting (see below).
 - **No disk writes, no logs, no telemetry.** The mnemonic is printed to
   your terminal and nowhere else. Nothing is written to a file, a
   history, or a socket.
@@ -84,13 +91,29 @@ It should print `8/8 checks passed.`
   use nvm). `BigInt` has been available in Node since v10.4, so this
   will work on far older versions too.
 - No internet connection required — and, per the best practices below,
-  none should be present while you run it.
+  none should be present while you run it. The script actively checks
+  for this and refuses to run if it detects one (see above).
 
 ## Usage
 
 ```
 node dice-to-seed.js
 ```
+
+If the script detects an internet connection, it refuses to run and exits
+before asking anything. If you're certain the machine is actually offline
+(e.g. you've already disconnected it and trust the connectivity check to
+be a false positive) and want to bypass the probe, pass
+`--ignore-internet-check`:
+
+```
+node dice-to-seed.js --ignore-internet-check
+```
+
+This does not disable any other safety behavior — it only skips the
+startup network probe. Only use it if you accept the risk that the probe
+could be wrong in the other direction too (i.e. you could in fact be
+online and this flag would let the script run anyway).
 
 You'll be asked how many rolls you'll provide (50 or 100), then to type
 them in as a string of digits 1–6 (spaces optional, e.g.
@@ -112,9 +135,10 @@ real funds. None of this is enforced by the script — it's on you.
 - **Disconnect the network** before you start: turn off Wi-Fi, unplug
   Ethernet, and disable Bluetooth. Airplane mode is not always
   sufficient on every OS/driver combination — physically disconnecting
-  is stronger. This script has no networking code, but an air-gapped
-  machine removes the network as a variable entirely, including from
-  every *other* process running on that machine.
+  is stronger. The script will refuse to run if it detects a
+  connection, but that check only covers this one process — an
+  air-gapped machine removes the network as a variable entirely,
+  including from every *other* process running on that machine.
 - **Consider a clean, disposable environment.** The strongest setup is
   a machine booted from a read-only or amnesiac live OS (e.g. Tails, or
   any live USB Linux distro) with no persistent storage, so nothing
