@@ -25,10 +25,12 @@
 // NO INSTALL NEEDED
 // ------------------
 // This program only uses features that are already built into Node.js
-// ("crypto", "net", and "readline"), plus this project's own
-// ../lib/dice-input.js (the part that actually collects dice rolls from
-// the keyboard, reused as-is so there is only one place that logic lives).
-// You do not need to run "npm install".
+// ("crypto", "net", and "readline"), plus two files that live right next to
+// it in this same folder: wordlist.js (the 2048 BIP-39 words) and
+// dice_input.js (the part that actually collects dice rolls from the
+// keyboard). Nothing outside this folder is needed, so you can copy the
+// folder onto an offline machine on its own. You do not need to run
+// "npm install".
 //
 // THE BIG PICTURE (the algorithm)
 // --------------------------------
@@ -58,7 +60,7 @@ const WORDLIST = require("./wordlist.js");
 const {
   collectDiceRollsInteractive,
   collectDiceRollsFromLines,
-} = require("../lib/dice-input.js");
+} = require("./dice_input.js");
 
 // ---------------------------------------------------------------------
 // PART 1: Turning dice rolls into a seed phrase (the core math)
@@ -181,8 +183,9 @@ function convertDiceDigitsToMnemonic(diceDigits, numberOfEntropyBits) {
 // PART 2: Talking to the user (asking questions, printing the result)
 // ---------------------------------------------------------------------
 //
-// The actual "type your dice rolls" part is reused, unchanged, from
-// ../lib/dice-input.js:
+// The actual "type your dice rolls" part lives in dice_input.js, next to
+// this file. It is the simplified twin of ../lib/dice-input.js: same
+// behaviour, written in the same plain style as this file. It gives us:
 //   - collectDiceRollsInteractive(rollCount) - used on a real terminal.
 //     Draws a live grid that updates after every keystroke, so a 50 or
 //     100-digit sequence is easy to enter correctly.
@@ -191,6 +194,7 @@ function convertDiceDigitsToMnemonic(diceDigits, numberOfEntropyBits) {
 //     grid would not make sense. It already returns validated digits from
 //     0 to 5 (one per die roll), so this file does not need its own
 //     dice-roll validation code.
+// Both of them hand back the same thing: a list of digits 0-5, one per roll.
 // Only the "how many dice rolls, 50 or 100?" question below is specific to
 // this program, so it still lives here.
 
@@ -445,10 +449,10 @@ async function runInteractiveProgram(skipInternetCheck) {
 
   const numberOfRolls = await askHowManyDiceRolls(waitForNextLine);
 
-  // Real terminal: use the live-updating grid from lib/dice-input.js. It reads keystrokes directly, so we
+  // Real terminal: use the live-updating grid from dice_input.js. It reads keystrokes directly, so we
   // must close this readline interface first (the two cannot both read stdin at the same time).
   // Piped input (for example a script or a test): the grid has no meaning without a real terminal, so
-  // lib/dice-input.js falls back to reading one plain line, using the same waitForNextLine queue as above.
+  // dice_input.js falls back to reading one plain line, using the same waitForNextLine queue as above.
   let diceDigits;
   if (process.stdin.isTTY) {
     readlineInterface.close();
