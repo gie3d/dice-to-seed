@@ -1,80 +1,37 @@
-// dice-input.js
+// libs/dice-input.js
 //
-// This file does one job: collect the dice rolls you type, and hand back the
-// exact sequence of die faces as text, for example "6142...".
+// Collecting the dice rolls you type, and handing back the die faces as text,
+// for example "6142...".
 //
-// It hands back the faces exactly as you typed them - "1" stays "1", "6"
-// stays "6" - because that text is what gets hashed in dice-to-seed.js, and
-// keeping it unchanged is what lets you re-compute your own seed on any
-// other computer with a plain `shasum -a 256`. Nothing here reorders,
-// re-scales or "fixes" your rolls.
+// The faces are handed back exactly as typed - "1" stays "1", "6" stays "6" -
+// because that text is what gets hashed in libs/mnemonic.js, and keeping it
+// unchanged is what lets you re-compute your own seed on any other computer
+// with a plain `shasum -a 256`. Nothing here reorders or "fixes" your rolls.
 //
 // There are two ways of collecting rolls, because there are two very
 // different situations:
 //
 //   1. You are sitting at a real terminal and typing by hand. Typing 64 or
 //      128 digits without losing your place is hard, so we draw a live grid
-//      that redraws after EVERY keystroke and tells you which roll number
-//      you are on. Backspace fixes the last roll. See
-//      collectDiceRollsInteractive below.
+//      that redraws after EVERY keystroke and tells you which roll number you
+//      are on. Backspace fixes the last roll.
+//   2. The input is piped in from a file or a test script, so there is no real
+//      person and no screen to draw a grid on. Then we simply read one whole
+//      line of digits and check it.
 //
-//   2. The input is piped in from a file or a test script, so there is no
-//      real person and no screen to draw a grid on. Then we simply read one
-//      whole line of digits and check it. See collectDiceRollsFromLines.
+// collectDiceRolls() at the bottom picks between them, so the main program
+// does not have to care which situation it is in.
 
 "use strict";
 
 // Node's built-in helper for reading the keyboard. We use two parts of it:
-// per-keystroke events (instead of whole lines), and moving the cursor
-// around so we can redraw the grid in place.
+// per-keystroke events (instead of whole lines), and moving the cursor around
+// so we can redraw the grid in place.
 const readline = require("node:readline");
+const { checkTypedDiceRolls } = require("./validate.js");
 
 // ---------------------------------------------------------------------
-// PART 1: Checking a whole typed line of dice rolls
-// ---------------------------------------------------------------------
-
-// Looks at one line the user typed and decides whether it is a valid set of
-// dice rolls. It never repairs the input: if anything is wrong it explains
-// what, and the caller asks again for the whole line.
-//
-// It returns an object shaped like one of these two:
-//   { isValid: true,  diceRollText: "6142..." }
-//   { isValid: false, reasonItIsInvalid: "..." }
-function checkTypedDiceRolls(typedLine, expectedNumberOfRolls) {
-  // Remove every space and tab, so "1 2 3" and "123" are both accepted.
-  const withoutSpaces = typedLine.replace(/\s+/g, "");
-
-  // The count has to match exactly. Too few rolls would mean less
-  // randomness than promised; too many would mean some were ignored.
-  if (withoutSpaces.length !== expectedNumberOfRolls) {
-    return {
-      isValid: false,
-      reasonItIsInvalid:
-        "Expected exactly " +
-        expectedNumberOfRolls +
-        " digits, got " +
-        withoutSpaces.length +
-        ".",
-    };
-  }
-
-  // Every character has to be a real die face: 1, 2, 3, 4, 5 or 6.
-  for (let index = 0; index < withoutSpaces.length; index = index + 1) {
-    const character = withoutSpaces[index];
-    if (character < "1" || character > "6") {
-      return {
-        isValid: false,
-        reasonItIsInvalid: "Only digits 1-6 are allowed (one per die face).",
-      };
-    }
-  }
-
-  // All good: hand back the faces exactly as typed, minus the spaces.
-  return { isValid: true, diceRollText: withoutSpaces };
-}
-
-// ---------------------------------------------------------------------
-// PART 2: The live grid (only useful on a real terminal)
+// The live grid (only useful on a real terminal)
 // ---------------------------------------------------------------------
 
 // How many rolls are shown per row of the grid. 10 keeps each row short and
@@ -257,7 +214,7 @@ function collectDiceRollsInteractive(totalNumberOfRolls) {
 }
 
 // ---------------------------------------------------------------------
-// PART 3: The plain line version (used when input is piped in)
+// The plain line version (used when input is piped in)
 // ---------------------------------------------------------------------
 
 // Reads one whole line of dice rolls, checks it, and asks again if it is not
@@ -285,9 +242,37 @@ async function collectDiceRollsFromLines(waitForNextLine, totalNumberOfRolls) {
   }
 }
 
+// ---------------------------------------------------------------------
+// Choosing between the two
+// ---------------------------------------------------------------------
+
+// Collects the rolls whichever way suits the situation, and hands back the die
+// faces as text. `waitForNextLine` and `readlineInterface` come from
+// libs/prompts.js, where the earlier questions were asked.
+//
+// The awkward part this hides from the main program: the live grid reads
+// keystrokes from stdin directly, and a readline interface cannot be reading
+// the same stdin at the same time - so on a real terminal the interface has to
+// be closed first. With piped input the opposite is true: everything may
+// already be sitting in that interface's queue, so it must be kept and reused,
+// or the dice-roll line would be lost.
+async function collectDiceRolls(numberOfRolls, waitForNextLine, readlineInterface) {
+  if (process.stdin.isTTY) {
+    readlineInterface.close();
+    console.log("Type each die face as you roll it - the grid below tracks your progress.\n");
+    return collectDiceRollsInteractive(numberOfRolls);
+  }
+
+  try {
+    return await collectDiceRollsFromLines(waitForNextLine, numberOfRolls);
+  } finally {
+    readlineInterface.close();
+  }
+}
+
 module.exports = {
-  checkTypedDiceRolls,
   buildGridLines,
   collectDiceRollsInteractive,
   collectDiceRollsFromLines,
+  collectDiceRolls,
 };

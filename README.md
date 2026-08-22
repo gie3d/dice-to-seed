@@ -80,16 +80,30 @@ BIP-39-checksummed word list, correctly, and do nothing else.
 ## Files
 
 ```
-dice-to-seed.js   The whole program: dice rolls -> entropy -> BIP-39 mnemonic,
-                  the offline check, the prompts, and the self-test.
-dice-input.js     Collecting dice rolls from the keyboard: the live grid for a
-                  real terminal, and the plain line reader for piped input.
-wordlist.js       The official 2048-word BIP-39 English wordlist.
+dice-to-seed.js       The flow, and nothing else: the order things happen in,
+                      from the opening banner to the printed words. ~140 lines,
+                      readable in a minute.
+
+libs/mnemonic.js      The maths: dice rolls -> entropy -> seed phrase. Read
+                      this one first if you read only one.
+libs/validate.js      What counts as acceptable input, and why bad input is
+                      refused rather than quietly repaired.
+libs/dice-input.js    Collecting the rolls: the live grid on a real terminal,
+                      the plain line reader when piped.
+libs/prompts.js       Asking questions and reading answers safely.
+libs/connectivity.js  The offline check — the only networking code here.
+libs/output.js        Everything the program prints, including the safety
+                      advice at the end.
+
+wordlist.js           The official 2048-word BIP-39 English wordlist.
+selftest.js           Test vectors and checks. Not part of generating a seed —
+                      a real run never loads this file.
 ```
 
-Three files, no subdirectories, no dependencies. Every line is commented
-for a reader who is not a cryptographer — the point is that you can read
-all of it before trusting it with money.
+No dependencies, and every line is commented for a reader who is not a
+cryptographer. Start at `dice-to-seed.js` to see what happens in what
+order, then open whichever step you want to check — the point is that you
+can read all of it before trusting it with money.
 
 ## How it works
 
@@ -162,11 +176,12 @@ to cost you money.
 The entropy hex is another way of writing your seed phrase — treat it
 with exactly the same care as the words.
 
-Run the built-in self-test at any time to verify this implementation
-against official BIP-39 test vectors, fully offline:
+Run the self-test at any time to verify this implementation against
+official BIP-39 test vectors, fully offline — either way works:
 
 ```
 node dice-to-seed.js --selftest
+node selftest.js
 ```
 
 It should print `27/27 checks passed.` The suite covers official BIP-39
@@ -267,9 +282,10 @@ real funds. None of this is enforced by the script — it's on you.
   practical, at minimum use a machine you trust and have kept patched,
   and close every other application first.
 - **Read the source first**, or have someone you trust read it — every
-  line of `dice-to-seed.js`, `dice-input.js` and `wordlist.js` is
-  commented specifically so this is practical to do yourself rather
-  than take on faith (see [Files](#files) above for what lives where).
+  line is commented specifically so this is practical to do yourself
+  rather than take on faith. `dice-to-seed.js` shows the whole flow in
+  about 140 lines; `libs/mnemonic.js` is the one that actually turns
+  your dice into words (see [Files](#files) above for what lives where).
   Run `node dice-to-seed.js --selftest` and confirm
   `27/27 checks passed.` before entering real dice rolls.
 
