@@ -428,9 +428,17 @@ function printMnemonic(mnemonic) {
 // unrelated tool turns the same dice rolls into the same words, then both
 // tools would have to be wrong in exactly the same way to lose your money.
 //
-// The entropy printed here is just another way of writing the seed phrase, so
-// it deserves exactly the same care as the words themselves.
-function printHowToVerifyElsewhere(entropyHexText) {
+// The command below deliberately does NOT contain your real dice rolls. A
+// ready-made command is easy to paste, and pasting it writes your rolls into
+// your shell's history file, in plain text, on disk - somewhere they have
+// never been, because this program reads them from stdin rather than as a
+// command-line argument. Your rolls are your seed phrase in another form, so
+// a convenience that quietly makes them outlive the session is not worth it.
+//
+// Instead the shape of the command is shown with a made-up example, which is
+// enough to type your own. The entropy IS printed, because you need it to
+// compare against - and it deserves exactly the same care as the words.
+function printHowToVerifyElsewhere(numberOfRolls, entropyHexText) {
   console.log("");
   console.log("----------------------------------------------------------------------");
   console.log("Optional but recommended: check this seed phrase against another tool.");
@@ -439,14 +447,29 @@ function printHowToVerifyElsewhere(entropyHexText) {
   console.log("       " + entropyHexText);
   console.log("");
   console.log("  2. Any computer can recompute it from your rolls with:");
-  console.log("       printf '<your rolls>' | shasum -a 256");
+  console.log("");
+  console.log("       printf '<all " + numberOfRolls + " of your rolls>' | shasum -a 256");
+  console.log("");
+  console.log("     For example, rolls that began 5, 3, 1, 6, 2 would be typed as");
+  console.log("     (this is an example, NOT your rolls):");
+  console.log("");
+  console.log("       printf '53162...' | shasum -a 256");
+  console.log("");
   console.log("     The first " + entropyHexText.length + " characters of that hash must equal the line above.");
+  console.log("");
+  console.log("     Your own rolls are not printed here on purpose: a ready-made");
+  console.log("     command is easy to paste, and pasting it writes your rolls into");
+  console.log("     your shell's history file, on disk, where they would outlive");
+  console.log("     this session. Type the command out with a leading space (most");
+  console.log("     shells then keep it out of history), or clear that history");
+  console.log("     afterwards.");
   console.log("");
   console.log("  3. Paste that entropy into any other offline BIP-39 tool. If it");
   console.log("     shows the same words, two independent programs agree.");
   console.log("");
-  console.log("That hex string IS your seed phrase in another form. Treat it exactly");
-  console.log("like the words: never type it into anything connected to a network.");
+  console.log("Your rolls, that hex string and the words above are three ways of");
+  console.log("writing the same secret. Never type any of them into anything");
+  console.log("connected to a network.");
   console.log("----------------------------------------------------------------------");
 }
 
@@ -760,7 +783,7 @@ async function runInteractiveProgram(skipInternetCheck) {
   );
 
   printMnemonic(mnemonic);
-  printHowToVerifyElsewhere(convertBytesToHexText(entropyByteNumbers));
+  printHowToVerifyElsewhere(numberOfRolls, convertBytesToHexText(entropyByteNumbers));
 
   console.log("");
   console.log("Write this down on paper now. Do not store it digitally, screenshot it,");

@@ -144,6 +144,15 @@ the digits you typed, anything can recompute it:
 printf '<your dice rolls>' | shasum -a 256
 ```
 
+The tool shows you the shape of this command with a made-up example, but
+deliberately **does not** fill in your actual rolls. Your rolls are your
+seed phrase in another form, and a ready-to-paste command is easy to
+paste — which would record them in your shell's history file, on disk,
+the one place they have never been (the program reads them from stdin,
+never as an argument). Type the command out yourself, with a leading
+space (most shells then keep it out of history) or in a shell with
+history disabled, and clear the history afterwards.
+
 The first 32 hex characters (12-word) or all 64 (24-word) must match the
 entropy the tool prints. Paste that entropy into any other offline
 BIP-39 implementation and you should get the same words. Two independent
@@ -273,9 +282,12 @@ real funds. None of this is enforced by the script — it's on you.
 - The dice digits and resulting mnemonic are never written to a file or
   shell history by this script — but your *shell itself* may keep
   history of commands you run (not the dice digits you type into the
-  prompt, since those go to stdin, not argv). If you're being
-  extremely careful, run it from a shell with history disabled, or
-  clear history afterward regardless.
+  prompt, since those go to stdin, not argv). The one thing that can
+  break this is the verification step: a `printf '<your rolls>' | shasum`
+  command you type yourself *does* put your rolls in that history, which
+  is why the tool shows only an example and leaves the typing to you.
+  Either way, if you're being extremely careful, run everything from a
+  shell with history disabled, or clear history afterward regardless.
 
 ### After you run it
 
@@ -294,12 +306,14 @@ real funds. None of this is enforced by the script — it's on you.
   existing access to that machine could theoretically have observed it
   while the process was running. This is why a disposable/air-gapped
   environment is the stronger choice for high-value wallets.
-- **Check it against a second tool.** Re-compute the entropy with
-  `printf '<your rolls>' | shasum -a 256` and feed that entropy to
-  another offline BIP-39 implementation; confirm you get the same
-  words (see [Verifying your seed](#verifying-your-seed-independently)).
-  Do this on the same air-gapped machine — never type your rolls, the
-  entropy, or the words into anything networked.
+- **Check it against a second tool.** Type
+  `printf '<your rolls>' | shasum -a 256` with your own digits, and feed
+  the resulting entropy to another offline BIP-39 implementation,
+  confirming you get the same words (see
+  [Verifying your seed](#verifying-your-seed-independently)). Do this on
+  the same air-gapped machine — never type your rolls, the entropy, or
+  the words into anything networked — and keep that command out of your
+  shell history (leading space, or clear it afterwards).
 - **Verify before you trust it.** Import the resulting mnemonic into an
   offline wallet (e.g. a hardware wallet in an air-gapped setup, or
   offline wallet software) and confirm it derives the addresses you
