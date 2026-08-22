@@ -103,6 +103,17 @@ export function convertDiceRollsToEntropyBytes(
   const hashBuffer = createHash("sha256").update(diceRollText, "utf8").digest();
   // subarray takes the first `numberOfEntropyBytes` bytes of the hash, and
   // Array.from turns them into plain numbers 0-255.
+  /*
+  console.log('1. hashBuffer', hashBuffer.length);
+  console.log('2. hashBuffer.subarray', hashBuffer.subarray(0, numberOfEntropyBytes).length);
+  console.log('3. hashBuffer', JSON.stringify(hashBuffer));
+  console.log('4. array from hashBuffer',JSON.stringify(Array.from(hashBuffer.subarray(0, numberOfEntropyBytes))));
+  Example Output
+  1. hashBuffer 32
+  2. hashBuffer.subarray 32
+  3. hashBuffer {"type":"Buffer","data":[96,54,83,102,5,229,70,24,12,116,233,89,148,202,183,252,65,178,78,45,41,17,222,4,103,101,187,125,90,176,55,133]}
+  4. array from hashBuffer [96,54,83,102,5,229,70,24,12,116,233,89,148,202,183,252,65,178,78,45,41,17,222,4,103,101,187,125,90,176,55,133]
+  */
   return Array.from(hashBuffer.subarray(0, numberOfEntropyBytes));
 }
 
@@ -208,8 +219,7 @@ export function convertDiceRollsToMnemonic(
   diceRollText: string,
   numberOfRolls: number
 ): string {
-  settingsForRollCount(numberOfRolls);
-
+  const settings = settingsForRollCount(numberOfRolls);
   const inputProblem = findProblemWithDiceRollText(diceRollText, numberOfRolls);
   if (inputProblem) {
     throw new Error(inputProblem);
@@ -224,7 +234,6 @@ export function convertDiceRollsToMnemonic(
     );
   }
 
-  const settings = settingsForRollCount(numberOfRolls);
   const entropyByteNumbers = convertDiceRollsToEntropyBytes(
     diceRollText,
     settings.numberOfEntropyBytes
