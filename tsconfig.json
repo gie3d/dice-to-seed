@@ -44,7 +44,11 @@
 
     "target": "ES2023",
     "lib": ["ES2023"],
-    "types": ["node"],
+
+    // Nothing is installed, so there are no type packages to pick up. The
+    // Node features this program uses are described by hand in
+    // node-types.d.ts instead - see that file for why.
+    "types": [],
 
     // Every safety check the compiler offers, including the one that treats
     // "this array index might be missing" as something to handle.
@@ -53,5 +57,5 @@
     "noImplicitOverride": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["*.ts", "libs/*.ts"]
+  "include": ["*.ts", "*.d.ts", "libs/*.ts"]
 }
