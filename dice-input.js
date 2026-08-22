@@ -1,19 +1,19 @@
-// dice_input.js
+// dice-input.js
 //
-// This file does one job: collect the dice rolls you type, and hand back a
-// list of digits from 0 to 5 (one per roll).
+// This file does one job: collect the dice rolls you type, and hand back the
+// exact sequence of die faces as text, for example "6142...".
 //
-// Why 0 to 5, when a die shows 1 to 6? Because the math in dice_to_seed.js
-// treats your rolls as digits in base 6, and base-6 digits go 0,1,2,3,4,5 -
-// just like base-10 digits go 0..9. So a rolled 1 becomes 0, a rolled 6
-// becomes 5, and so on. Nothing is reordered or "corrected"; only that one
-// subtraction happens.
+// It hands back the faces exactly as you typed them - "1" stays "1", "6"
+// stays "6" - because that text is what gets hashed in dice-to-seed.js, and
+// keeping it unchanged is what lets you re-compute your own seed on any
+// other computer with a plain `shasum -a 256`. Nothing here reorders,
+// re-scales or "fixes" your rolls.
 //
 // There are two ways of collecting rolls, because there are two very
 // different situations:
 //
-//   1. You are sitting at a real terminal and typing by hand. Typing 100
-//      digits without losing your place is hard, so we draw a live grid
+//   1. You are sitting at a real terminal and typing by hand. Typing 64 or
+//      128 digits without losing your place is hard, so we draw a live grid
 //      that redraws after EVERY keystroke and tells you which roll number
 //      you are on. Backspace fixes the last roll. See
 //      collectDiceRollsInteractive below.
@@ -21,10 +21,6 @@
 //   2. The input is piped in from a file or a test script, so there is no
 //      real person and no screen to draw a grid on. Then we simply read one
 //      whole line of digits and check it. See collectDiceRollsFromLines.
-//
-// This is a simplified version of ../lib/dice-input.js: the behaviour is
-// the same, but it is written with plain loops and plain names so it can be
-// read top to bottom without knowing any terminal tricks in advance.
 
 "use strict";
 
@@ -42,7 +38,7 @@ const readline = require("node:readline");
 // what, and the caller asks again for the whole line.
 //
 // It returns an object shaped like one of these two:
-//   { isValid: true,  diceDigits: [3, 5, 1, ...] }
+//   { isValid: true,  diceRollText: "6142..." }
 //   { isValid: false, reasonItIsInvalid: "..." }
 function checkTypedDiceRolls(typedLine, expectedNumberOfRolls) {
   // Remove every space and tab, so "1 2 3" and "123" are both accepted.
@@ -73,13 +69,8 @@ function checkTypedDiceRolls(typedLine, expectedNumberOfRolls) {
     }
   }
 
-  // All good: turn each character "1".."6" into a base-6 digit 0..5.
-  const diceDigits = [];
-  for (let index = 0; index < withoutSpaces.length; index = index + 1) {
-    const dieFaceNumber = Number(withoutSpaces[index]);
-    diceDigits.push(dieFaceNumber - 1);
-  }
-  return { isValid: true, diceDigits: diceDigits };
+  // All good: hand back the faces exactly as typed, minus the spaces.
+  return { isValid: true, diceRollText: withoutSpaces };
 }
 
 // ---------------------------------------------------------------------
@@ -98,10 +89,10 @@ const NUMBER_OF_COLUMNS = 10;
 // `dieFacesTypedSoFar` is a list of the characters typed so far, such as
 // ["4", "6", "2"]. Rolls not yet typed are drawn as a dot.
 function buildGridLines(dieFacesTypedSoFar, totalNumberOfRolls) {
-  // How many rows we need in total, rounding up (55 rolls needs 6 rows).
+  // How many rows we need in total, rounding up (64 rolls needs 7 rows).
   const numberOfRows = Math.ceil(totalNumberOfRolls / NUMBER_OF_COLUMNS);
   // How wide the row-number labels should be, so they line up in a column.
-  // For 100 rolls this is 3, because "100" is 3 characters long.
+  // For 128 rolls this is 3, because "128" is 3 characters long.
   const labelWidth = String(totalNumberOfRolls).length;
 
   const rows = [];
@@ -184,16 +175,14 @@ function makeScreenRedrawer(outputStream) {
 }
 
 // Collects `totalNumberOfRolls` dice rolls one keystroke at a time, redrawing
-// the grid after each one. Returns a promise that finishes with the list of
-// base-6 digits (0-5) once the user has typed every roll and pressed Enter.
+// the grid after each one. Returns a promise that finishes with the typed die
+// faces as one string, once the user has typed every roll and pressed Enter.
 //
 // Only use this when process.stdin.isTTY is true, meaning a real terminal.
 function collectDiceRollsInteractive(totalNumberOfRolls) {
   return new Promise(function (resolve) {
-    // The characters typed so far, such as ["4", "6", "2"]. Used for drawing.
+    // The characters typed so far, such as ["4", "6", "2"].
     const dieFacesTypedSoFar = [];
-    // The same rolls as base-6 digits (0-5). This is what we hand back.
-    const diceDigits = [];
     // Draws the grid in place each time we call it.
     const redraw = makeScreenRedrawer(process.stdout);
 
@@ -221,7 +210,6 @@ function collectDiceRollsInteractive(totalNumberOfRolls) {
       if (keyDetails && keyDetails.name === "backspace") {
         if (dieFacesTypedSoFar.length > 0) {
           dieFacesTypedSoFar.pop();
-          diceDigits.pop();
           redraw(buildGridLines(dieFacesTypedSoFar, totalNumberOfRolls));
         }
         return;
@@ -233,7 +221,7 @@ function collectDiceRollsInteractive(totalNumberOfRolls) {
         if (dieFacesTypedSoFar.length === totalNumberOfRolls) {
           stopListening();
           process.stdout.write("\n");
-          resolve(diceDigits);
+          resolve(dieFacesTypedSoFar.join(""));
         }
         return;
       }
@@ -242,10 +230,12 @@ function collectDiceRollsInteractive(totalNumberOfRolls) {
       // asked for. Extra digits are ignored on purpose - to change one you
       // must press Backspace deliberately.
       const isDieFace =
-        typedCharacter !== undefined && typedCharacter >= "1" && typedCharacter <= "6" && typedCharacter.length === 1;
+        typedCharacter !== undefined &&
+        typedCharacter.length === 1 &&
+        typedCharacter >= "1" &&
+        typedCharacter <= "6";
       if (isDieFace && dieFacesTypedSoFar.length < totalNumberOfRolls) {
         dieFacesTypedSoFar.push(typedCharacter);
-        diceDigits.push(Number(typedCharacter) - 1);
         redraw(buildGridLines(dieFacesTypedSoFar, totalNumberOfRolls));
         return;
       }
@@ -272,7 +262,10 @@ function collectDiceRollsInteractive(totalNumberOfRolls) {
 
 // Reads one whole line of dice rolls, checks it, and asks again if it is not
 // valid. `waitForNextLine` is the line-waiting function built in
-// dice_to_seed.js. Returns the list of base-6 digits (0-5).
+// dice-to-seed.js; it throws if the input ends early, and that error is
+// deliberately left to travel up to the main program, which reports it and
+// exits with a failure code rather than pretending nothing happened.
+// Returns the die faces as one string, for example "6142...".
 async function collectDiceRollsFromLines(waitForNextLine, totalNumberOfRolls) {
   while (true) {
     process.stdout.write(
@@ -282,7 +275,7 @@ async function collectDiceRollsFromLines(waitForNextLine, totalNumberOfRolls) {
     const result = checkTypedDiceRolls(typedLine, totalNumberOfRolls);
 
     if (result.isValid) {
-      return result.diceDigits;
+      return result.diceRollText;
     }
 
     // Something was wrong. Say exactly what, and ask for the whole sequence
