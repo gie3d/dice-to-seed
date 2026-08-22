@@ -1,34 +1,49 @@
 #!/usr/bin/env node
 
-// selftest.js
+// selftest.ts
 //
-// Proof that the maths in libs/mnemonic.js is correct, kept in its own file
+// Proof that the maths in libs/mnemonic.ts is correct, kept in its own file
 // so that the program itself contains nothing but the program. Test vectors, expected
 // answers and check-counting machinery are not part of generating a seed
 // phrase, and mixing them in would make the file you are asked to read
 // before trusting your money longer than it needs to be.
 //
-// A real run never loads this file at all: dice-to-seed.js only requires it
+// A real run never loads this file at all: dice-to-seed.ts only imports it
 // when you actually ask for --selftest.
 //
 // HOW TO RUN
 // ----------
-//   node selftest.js                 -> run every check
-//   node dice-to-seed.js --selftest  -> exactly the same thing
+//   node selftest.ts                 -> run every check
+//   node dice-to-seed.ts --selftest  -> exactly the same thing
 //
 // Either way the process exits with status 0 if every check passed and 1 if
 // any check failed, so a script can rely on it.
 
-"use strict";
-
-const WORDLIST = require("./wordlist.js");
-const {
-  DICE_ROLL_SETTINGS,
+import { WORDLIST } from "./wordlist.ts";
+import {
+  settingsForRollCount,
   convertDiceRollsToEntropyBytes,
   convertBytesToHexText,
   convertEntropyBytesToMnemonic,
   convertDiceRollsToMnemonic,
-} = require("./libs/mnemonic.js");
+} from "./libs/mnemonic.ts";
+
+// A known entropy value and the exact words BIP-39 says it must produce.
+type EntropyVector = {
+  entropyHexText: string;
+  expectedMnemonic: string;
+};
+
+// A known roll sequence and the exact entropy and words it must produce.
+type DiceVector = {
+  diceRollText: string;
+  expectedEntropyHexText: string;
+  expectedMnemonic: string;
+};
+
+// Records one check and prints its result. `extraDetail` is only printed when
+// the check failed, to show what was expected against what came out.
+type Check = (didPass: boolean, description: string, extraDetail?: string) => void;
 
 // ---------------------------------------------------------------------
 // What is checked
@@ -45,10 +60,10 @@ const {
 //      turn into a weak seed phrase.
 
 // A tiny helper so every check below reads the same way and gets counted.
-function makeChecker() {
+function makeChecker(): { check: Check; tally: { passed: number; total: number } } {
   const tally = { passed: 0, total: 0 };
 
-  function check(didPass, description, extraDetail) {
+  function check(didPass: boolean, description: string, extraDetail?: string): void {
     tally.total = tally.total + 1;
     if (didPass) {
       tally.passed = tally.passed + 1;
@@ -65,7 +80,11 @@ function makeChecker() {
 }
 
 // Runs a function that is EXPECTED to throw, and reports whether it did.
-function checkThatItRefuses(check, description, functionThatShouldThrow) {
+function checkThatItRefuses(
+  check: Check,
+  description: string,
+  functionThatShouldThrow: () => unknown
+): void {
   let itThrew = false;
   try {
     functionThatShouldThrow();
@@ -75,11 +94,11 @@ function checkThatItRefuses(check, description, functionThatShouldThrow) {
   check(itThrew, description);
 }
 
-function runSelfTest() {
+export function runSelfTest(): boolean {
   const { check, tally } = makeChecker();
 
   // --- 1. Official BIP-39 test vectors -------------------------------
-  const officialTestVectors = [
+  const officialTestVectors: EntropyVector[] = [
     {
       entropyHexText: "00".repeat(16),
       expectedMnemonic:
@@ -124,8 +143,7 @@ function runSelfTest() {
     },
   ];
 
-  for (let index = 0; index < officialTestVectors.length; index = index + 1) {
-    const testVector = officialTestVectors[index];
+  for (const testVector of officialTestVectors) {
     const entropyByteNumbers = Array.from(Buffer.from(testVector.entropyHexText, "hex"));
     const actualMnemonic = convertEntropyBytesToMnemonic(entropyByteNumbers);
     check(
@@ -138,7 +156,7 @@ function runSelfTest() {
   // --- 2. Known dice vectors -----------------------------------------
   // Fixed roll sequences and the exact entropy and words they must produce.
   // Verify the entropy yourself, offline, with the printed command.
-  const diceTestVectors = [
+  const diceTestVectors: DiceVector[] = [
     {
       diceRollText: "2266221566312421226244661114266333224653225432333531631656251526",
       expectedEntropyHexText: "eb53dd9a8255867c26499b1686e24b2a",
@@ -151,10 +169,9 @@ function runSelfTest() {
     },
   ];
 
-  for (let index = 0; index < diceTestVectors.length; index = index + 1) {
-    const testVector = diceTestVectors[index];
+  for (const testVector of diceTestVectors) {
     const numberOfRolls = testVector.diceRollText.length;
-    const settings = DICE_ROLL_SETTINGS[numberOfRolls];
+    const settings = settingsForRollCount(numberOfRolls);
     const entropyByteNumbers = convertDiceRollsToEntropyBytes(
       testVector.diceRollText,
       settings.numberOfEntropyBytes
@@ -174,7 +191,7 @@ function runSelfTest() {
     );
     check(
       actualMnemonic.split(" ").length === settings.numberOfWords &&
-        actualMnemonic.split(" ").every(function (word) {
+        actualMnemonic.split(" ").every(function (word: string): boolean {
           return WORDLIST.includes(word);
         }),
       numberOfRolls + " rolls -> every word is a real BIP-39 word"
@@ -182,7 +199,11 @@ function runSelfTest() {
   }
 
   // --- 3. Things this program must refuse to do ----------------------
-  const goodRolls64 = diceTestVectors[0].diceRollText;
+  const firstDiceVector = diceTestVectors[0];
+  if (firstDiceVector === undefined) {
+    throw new Error("the dice test vectors above are missing");
+  }
+  const goodRolls64 = firstDiceVector.diceRollText;
 
   checkThatItRefuses(check, "refuses an unsupported roll count", function () {
     convertDiceRollsToMnemonic(goodRolls64, 50);
@@ -224,22 +245,18 @@ function runSelfTest() {
   console.log(tally.passed + "/" + tally.total + " checks passed.");
   console.log("");
   console.log("You can verify the dice vectors above by hand, offline:");
-  console.log("  printf '" + diceTestVectors[0].diceRollText + "' | shasum -a 256");
-  console.log("  -> must start with " + diceTestVectors[0].expectedEntropyHexText);
+  console.log("  printf '" + firstDiceVector.diceRollText + "' | shasum -a 256");
+  console.log("  -> must start with " + firstDiceVector.expectedEntropyHexText);
 
   // Report rather than exiting here, so that whoever called this decides what
   // to do with the answer (both callers below turn it into an exit status).
   return tally.passed === tally.total;
 }
 
-// Run the checks when this file is launched directly ("node selftest.js").
-// When dice-to-seed.js --selftest requires it instead, it calls runSelfTest()
-// itself and handles the exit status the same way.
-if (require.main === module) {
+// Run the checks when this file is launched directly ("node selftest.ts").
+// When dice-to-seed.ts --selftest imports it instead, that file calls
+// runSelfTest() and handles the exit status the same way.
+if (import.meta.main) {
   const allChecksPassed = runSelfTest();
   process.exit(allChecksPassed ? 0 : 1);
 }
-
-module.exports = {
-  runSelfTest,
-};

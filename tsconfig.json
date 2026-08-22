@@ -1,0 +1,57 @@
+// tsconfig.json
+//
+// This file is OPTIONAL. It is not needed to run the program: Node strips the
+// type annotations as it loads each .ts file, so `node dice-to-seed.ts` works
+// with nothing installed and nothing built. This project still has zero
+// runtime dependencies.
+//
+// It is here for two other things:
+//   1. Editors read it, so you get the types explained to you as you read
+//      the code.
+//   2. If you want the compiler to actually check the types, install it
+//      yourself, outside this repo or in a throwaway copy of it:
+//        npm install --no-save typescript @types/node
+//        npx tsc --noEmit
+//      Do that on your everyday machine, never on the air-gapped one you
+//      generate a real seed phrase on.
+{
+  "compilerOptions": {
+    // Node runs these files by stripping types, never by compiling them, so
+    // the compiler must never emit anything either.
+    "noEmit": true,
+
+    // Only allow TypeScript features that can be erased. Enums, namespaces
+    // and parameter properties need real compilation, so this setting stops
+    // anyone adding syntax that Node could not run directly.
+    "erasableSyntaxOnly": true,
+
+    // Imports are written the way Node needs them: with the real ".ts"
+    // extension, and with "import type" wherever only a type is being
+    // borrowed (a plain import of a type would leave a runtime import of
+    // something that does not exist - verbatimModuleSyntax below catches
+    // that mistake).
+    //
+    // "module": "nodenext" would be the obvious choice, but it decides
+    // whether a file is a module by looking for a package.json saying
+    // "type": "module" - and this project deliberately has no package.json
+    // at all. Node itself does not need one: it recognises these files as
+    // modules from the import syntax. So the compiler is told plainly that
+    // these are ES modules.
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "types": ["node"],
+
+    // Every safety check the compiler offers, including the one that treats
+    // "this array index might be missing" as something to handle.
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["*.ts", "libs/*.ts"]
+}

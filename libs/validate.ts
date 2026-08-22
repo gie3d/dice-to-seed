@@ -1,4 +1,4 @@
-// libs/validate.js
+// libs/validate.ts
 //
 // Everything that decides whether input is acceptable. Nothing here changes
 // your dice rolls; it only answers "may we use these?" and, when the answer is
@@ -7,11 +7,20 @@
 // Two audiences:
 //   - checkTypedDiceRolls() checks one line a person typed, and is used to
 //     re-prompt them.
-//   - findProblemWith...() are used deeper in, by libs/mnemonic.js, so that
+//   - findProblemWith...() are used deeper in, by libs/mnemonic.ts, so that
 //     even code calling this project directly cannot slip a short or
 //     impossible roll sequence past the maths.
+//
+// The types below are also part of the explanation: DiceRollCheck says, in a
+// way the compiler enforces, that a result carries EITHER accepted rolls OR a
+// reason they were refused - never both, and never neither.
 
-"use strict";
+// The answer from checkTypedDiceRolls. Reading `isValid` tells you which of
+// the two shapes you have, so there is no way to read `diceRollText` off a
+// result that was actually a refusal.
+export type DiceRollCheck =
+  | { isValid: true; diceRollText: string }
+  | { isValid: false; reasonItIsInvalid: string };
 
 // Looks at one line the user typed and decides whether it is a valid set of
 // dice rolls. It never repairs the input: if anything is wrong it explains
@@ -20,7 +29,10 @@
 // It returns an object shaped like one of these two:
 //   { isValid: true,  diceRollText: "6142..." }
 //   { isValid: false, reasonItIsInvalid: "..." }
-function checkTypedDiceRolls(typedLine, expectedNumberOfRolls) {
+export function checkTypedDiceRolls(
+  typedLine: string,
+  expectedNumberOfRolls: number
+): DiceRollCheck {
   // Remove every space and tab, so "1 2 3" and "123" are both accepted.
   const withoutSpaces = typedLine.replace(/\s+/g, "");
 
@@ -39,8 +51,7 @@ function checkTypedDiceRolls(typedLine, expectedNumberOfRolls) {
   }
 
   // Every character has to be a real die face: 1, 2, 3, 4, 5 or 6.
-  for (let index = 0; index < withoutSpaces.length; index = index + 1) {
-    const character = withoutSpaces[index];
+  for (const character of withoutSpaces) {
     if (character < "1" || character > "6") {
       return {
         isValid: false,
@@ -59,7 +70,10 @@ function checkTypedDiceRolls(typedLine, expectedNumberOfRolls) {
 // instead of quietly producing a weak seed phrase.
 //
 // Returns an error message, or null when everything is fine.
-function findProblemWithDiceRollText(diceRollText, expectedNumberOfRolls) {
+export function findProblemWithDiceRollText(
+  diceRollText: unknown,
+  expectedNumberOfRolls: number
+): string | null {
   if (typeof diceRollText !== "string") {
     return "Dice rolls must be given as text, for example \"6142...\".";
   }
@@ -73,7 +87,10 @@ function findProblemWithDiceRollText(diceRollText, expectedNumberOfRolls) {
     );
   }
   for (let index = 0; index < diceRollText.length; index = index + 1) {
-    const character = diceRollText[index];
+    // charAt rather than [index] because charAt always hands back a string;
+    // reading past the end of a string with [index] would give `undefined`,
+    // and comparing that to "1" would quietly do the wrong thing.
+    const character = diceRollText.charAt(index);
     if (character < "1" || character > "6") {
       return (
         "Dice rolls may only contain the digits 1-6; found " +
@@ -98,7 +115,7 @@ function findProblemWithDiceRollText(diceRollText, expectedNumberOfRolls) {
 // mistake is invisible - this is the only place it can still be caught.
 //
 // Returns an error message, or null when the rolls look plausible.
-function findProblemWithDiceRandomness(diceRollText) {
+export function findProblemWithDiceRandomness(diceRollText: string): string | null {
   // How many different faces appeared at all. Fewer than three different
   // faces over 64+ rolls is astronomically unlikely (below 1 in 10^29).
   const facesSeen = new Set(diceRollText.split(""));
@@ -107,7 +124,7 @@ function findProblemWithDiceRandomness(diceRollText) {
       "every one of your " +
       diceRollText.length +
       " rolls is the digit " +
-      diceRollText[0] +
+      diceRollText.charAt(0) +
       "."
     );
   }
@@ -138,9 +155,3 @@ function findProblemWithDiceRandomness(diceRollText) {
 
   return null;
 }
-
-module.exports = {
-  checkTypedDiceRolls,
-  findProblemWithDiceRollText,
-  findProblemWithDiceRandomness,
-};

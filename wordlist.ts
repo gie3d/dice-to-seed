@@ -2,9 +2,12 @@
 // https://github.com/bitcoin/bips/blob/master/bip-0039/english.txt
 // SHA-256 of the source file: 2f5eed53a4727b4bf8880d8f3f199efc90e58503646d9ff8eff3a2ed3b24dbda
 // Verify by re-downloading and checking against this hash before trusting this file.
-"use strict";
+//
+// Typed as readonly so that nothing anywhere in the program can accidentally
+// reorder or replace a word: the position of every word in this list is what
+// gives it its meaning in a seed phrase.
 
-const WORDLIST = [
+export const WORDLIST: readonly string[] = [
   "abandon", "ability", "able", "about", "above", "absent", "absorb", "abstract",
   "absurd", "abuse", "access", "accident", "account", "accuse", "achieve", "acid",
   "acoustic", "acquire", "across", "act", "action", "actor", "actress", "actual",
@@ -264,5 +267,3 @@ const WORDLIST = [
 ];
 
 if (WORDLIST.length !== 2048) throw new Error("wordlist corrupted: expected 2048 words");
-
-module.exports = WORDLIST;

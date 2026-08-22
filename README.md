@@ -8,6 +8,11 @@ six-sided dice rolls, entirely offline.
 128 dice rolls  ->  SHA-256  ->  256-bit entropy  ->  24-word mnemonic
 ```
 
+Written in TypeScript, and run directly: `node dice-to-seed.ts`. Node strips
+the type annotations as it loads each file — there is no build step, no
+compiler and no `node_modules` involved in generating a seed. This needs
+Node 22.18 or newer (24 recommended; `.nvmrc` pins the tested version).
+
 > **Changed from earlier versions.** This tool used to take 50/100 rolls
 > and fold them into a big base-6 number. It now takes 64/128 rolls and
 > hashes them with SHA-256. The results are different: **the same dice
@@ -35,7 +40,11 @@ BIP-39-checksummed word list, correctly, and do nothing else.
 ## Design principles
 
 - **Zero dependencies.** No `npm install`, no `package.json`, no
-  `node_modules`. The only modules used are Node's own built-ins:
+  `node_modules` — and no compiler, despite being TypeScript: Node
+  runs the `.ts` files by erasing the types as it reads them. The
+  `tsconfig.json` is only for editors and for an optional
+  `tsc --noEmit` check you can run elsewhere; it is never needed to
+  generate a seed. The only modules used are Node's own built-ins:
   `crypto` (for SHA-256, part of the BIP-39 checksum), `readline` (to
   prompt you interactively), and `net` (only for the offline check
   below). Nothing is fetched from the internet at install time.
@@ -66,7 +75,7 @@ BIP-39-checksummed word list, correctly, and do nothing else.
 - **Every result is reproducible elsewhere.** Your entropy is just
   `SHA-256` of the digits you typed, so any second tool can confirm
   this program got it right (see [Verifying your seed](#verifying-your-seed-independently)).
-- **The wordlist is verifiable, not hand-typed.** `wordlist.js`
+- **The wordlist is verifiable, not hand-typed.** `wordlist.ts`
   contains the official 2048-word BIP-39 English list, sourced from the
   canonical [`bitcoin/bips`](https://github.com/bitcoin/bips) repository
   and checked against its well-known SHA-256 hash
@@ -80,28 +89,30 @@ BIP-39-checksummed word list, correctly, and do nothing else.
 ## Files
 
 ```
-dice-to-seed.js       The flow, and nothing else: the order things happen in,
-                      from the opening banner to the printed words. ~140 lines,
+dice-to-seed.ts       The flow, and nothing else: the order things happen in,
+                      from the opening banner to the printed words. ~150 lines,
                       readable in a minute.
 
-libs/mnemonic.js      The maths: dice rolls -> entropy -> seed phrase. Read
+libs/mnemonic.ts      The maths: dice rolls -> entropy -> seed phrase. Read
                       this one first if you read only one.
-libs/validate.js      What counts as acceptable input, and why bad input is
+libs/validate.ts      What counts as acceptable input, and why bad input is
                       refused rather than quietly repaired.
-libs/dice-input.js    Collecting the rolls: the live grid on a real terminal,
+libs/dice-input.ts    Collecting the rolls: the live grid on a real terminal,
                       the plain line reader when piped.
-libs/prompts.js       Asking questions and reading answers safely.
-libs/connectivity.js  The offline check — the only networking code here.
-libs/output.js        Everything the program prints, including the safety
+libs/prompts.ts       Asking questions and reading answers safely.
+libs/connectivity.ts  The offline check — the only networking code here.
+libs/output.ts        Everything the program prints, including the safety
                       advice at the end.
 
-wordlist.js           The official 2048-word BIP-39 English wordlist.
-selftest.js           Test vectors and checks. Not part of generating a seed —
+wordlist.ts           The official 2048-word BIP-39 English wordlist.
+selftest.ts           Test vectors and checks. Not part of generating a seed —
                       a real run never loads this file.
+tsconfig.json         Optional: settings for editors and for `tsc --noEmit`.
+                      Never needed to run the program.
 ```
 
 No dependencies, and every line is commented for a reader who is not a
-cryptographer. Start at `dice-to-seed.js` to see what happens in what
+cryptographer. Start at `dice-to-seed.ts` to see what happens in what
 order, then open whichever step you want to check — the point is that you
 can read all of it before trusting it with money.
 
@@ -180,8 +191,8 @@ Run the self-test at any time to verify this implementation against
 official BIP-39 test vectors, fully offline — either way works:
 
 ```
-node dice-to-seed.js --selftest
-node selftest.js
+node dice-to-seed.ts --selftest
+node selftest.ts
 ```
 
 It should print `27/27 checks passed.` The suite covers official BIP-39
@@ -192,10 +203,17 @@ short sequences, out-of-range faces, and non-random-looking rolls).
 
 ## Requirements
 
-- Node.js (any reasonably modern version; `.nvmrc` in this repo pins
-  the version this was built and tested against — run `nvm use` if you
-  use nvm). Only long-standing built-ins are used (`crypto`, `readline`,
-  `net`), so old versions work too.
+- **Node.js 22.18 or newer** (24 recommended; `.nvmrc` pins the version
+  this was built and tested against — run `nvm use` if you use nvm).
+  That floor is where Node began running `.ts` files directly by
+  stripping their types; on anything older these files will not start.
+  Everything else used is a long-standing built-in (`crypto`,
+  `readline`, `net`).
+- **No TypeScript compiler.** You do not need `tsc`, and you do not need
+  `npm install`, to run this. If you *want* the compiler to check the
+  types, install it outside this repo (`npm install --no-save
+  typescript @types/node`, then `npx tsc --noEmit`) — and do that on
+  your everyday machine, not the air-gapped one.
 - No internet connection required — and, per the best practices below,
   none should be present while you run it. The script actively checks
   for this and refuses to run if it detects one (see above).
@@ -203,7 +221,7 @@ short sequences, out-of-range faces, and non-random-looking rolls).
 ## Usage
 
 ```
-node dice-to-seed.js
+node dice-to-seed.ts
 ```
 
 If the script detects an internet connection, it refuses to run and exits
@@ -213,7 +231,7 @@ be a false positive) and want to bypass the probe, pass
 `--skip-internet-check`:
 
 ```
-node dice-to-seed.js --skip-internet-check
+node dice-to-seed.ts --skip-internet-check
 ```
 
 (`--ignore-internet-check`, the name earlier versions used, is still
@@ -283,10 +301,13 @@ real funds. None of this is enforced by the script — it's on you.
   and close every other application first.
 - **Read the source first**, or have someone you trust read it — every
   line is commented specifically so this is practical to do yourself
-  rather than take on faith. `dice-to-seed.js` shows the whole flow in
-  about 140 lines; `libs/mnemonic.js` is the one that actually turns
+  rather than take on faith. `dice-to-seed.ts` shows the whole flow in
+  about 150 lines; `libs/mnemonic.ts` is the one that actually turns
   your dice into words (see [Files](#files) above for what lives where).
-  Run `node dice-to-seed.js --selftest` and confirm
+  The types are part of the explanation: `libs/validate.ts` uses one to
+  make "accepted rolls" and "reason they were refused" mutually
+  exclusive by construction.
+  Run `node dice-to-seed.ts --selftest` and confirm
   `27/27 checks passed.` before entering real dice rolls.
 
 ### While you run it

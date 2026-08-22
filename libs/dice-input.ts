@@ -1,10 +1,10 @@
-// libs/dice-input.js
+// libs/dice-input.ts
 //
 // Collecting the dice rolls you type, and handing back the die faces as text,
 // for example "6142...".
 //
 // The faces are handed back exactly as typed - "1" stays "1", "6" stays "6" -
-// because that text is what gets hashed in libs/mnemonic.js, and keeping it
+// because that text is what gets hashed in libs/mnemonic.ts, and keeping it
 // unchanged is what lets you re-compute your own seed on any other computer
 // with a plain `shasum -a 256`. Nothing here reorders or "fixes" your rolls.
 //
@@ -22,13 +22,22 @@
 // collectDiceRolls() at the bottom picks between them, so the main program
 // does not have to care which situation it is in.
 
-"use strict";
-
 // Node's built-in helper for reading the keyboard. We use two parts of it:
 // per-keystroke events (instead of whole lines), and moving the cursor around
 // so we can redraw the grid in place.
-const readline = require("node:readline");
-const { checkTypedDiceRolls } = require("./validate.js");
+import * as readline from "node:readline";
+import { checkTypedDiceRolls } from "./validate.ts";
+// `import type` because WaitForNextLine is only a description of a function
+// shape, not a real value: it disappears entirely when this file runs, so no
+// loading of libs/prompts.ts happens here.
+import type { WaitForNextLine } from "./prompts.ts";
+
+// What Node tells us about a key that was pressed. Both fields are optional
+// because plain character keys arrive with almost nothing filled in.
+type KeyPressDetails = {
+  name?: string;
+  ctrl?: boolean;
+};
 
 // ---------------------------------------------------------------------
 // The live grid (only useful on a real terminal)
@@ -45,14 +54,17 @@ const NUMBER_OF_COLUMNS = 10;
 //
 // `dieFacesTypedSoFar` is a list of the characters typed so far, such as
 // ["4", "6", "2"]. Rolls not yet typed are drawn as a dot.
-function buildGridLines(dieFacesTypedSoFar, totalNumberOfRolls) {
+export function buildGridLines(
+  dieFacesTypedSoFar: readonly string[],
+  totalNumberOfRolls: number
+): string[] {
   // How many rows we need in total, rounding up (64 rolls needs 7 rows).
   const numberOfRows = Math.ceil(totalNumberOfRolls / NUMBER_OF_COLUMNS);
   // How wide the row-number labels should be, so they line up in a column.
   // For 128 rolls this is 3, because "128" is 3 characters long.
   const labelWidth = String(totalNumberOfRolls).length;
 
-  const rows = [];
+  const rows: string[] = [];
   for (let rowNumber = 0; rowNumber < numberOfRows; rowNumber = rowNumber + 1) {
     // The first and last roll (counting from 0) shown on this row.
     const firstRollOnRow = rowNumber * NUMBER_OF_COLUMNS;
@@ -63,13 +75,12 @@ function buildGridLines(dieFacesTypedSoFar, totalNumberOfRolls) {
 
     // Build the cells of this row: the typed face if we have got that far,
     // otherwise a dot as a placeholder for a roll still to come.
-    const cells = [];
+    const cells: string[] = [];
     for (let index = firstRollOnRow; index < lastRollOnRow; index = index + 1) {
-      if (index < dieFacesTypedSoFar.length) {
-        cells.push(dieFacesTypedSoFar[index]);
-      } else {
-        cells.push("·");
-      }
+      // Nothing typed at this position yet means nothing to show yet, so the
+      // cell gets a dot as a placeholder for a roll still to come.
+      const dieFace = dieFacesTypedSoFar[index];
+      cells.push(dieFace === undefined ? "·" : dieFace);
     }
 
     // The label humans read, counting from 1: for example " 1- 10".
@@ -83,7 +94,7 @@ function buildGridLines(dieFacesTypedSoFar, totalNumberOfRolls) {
 
   // The line above the grid: either which roll to type next, or that
   // everything has been entered and we are waiting for Enter.
-  let statusLine;
+  let statusLine: string;
   if (dieFacesTypedSoFar.length === totalNumberOfRolls) {
     statusLine =
       "All " +
@@ -109,10 +120,10 @@ function buildGridLines(dieFacesTypedSoFar, totalNumberOfRolls) {
 //
 // It works by remembering how many lines it printed last time, moving the
 // cursor back up that many lines, and clearing from there downwards.
-function makeScreenRedrawer(outputStream) {
+function makeScreenRedrawer(outputStream: NodeJS.WriteStream): (linesToPrint: string[]) => void {
   let numberOfLinesPrintedLastTime = 0;
 
-  return function redraw(linesToPrint) {
+  return function redraw(linesToPrint: string[]): void {
     if (numberOfLinesPrintedLastTime > 0) {
       // The cursor is sitting at the end of the last line we printed, so we
       // move up to the first one (hence the minus, and the minus one).
@@ -136,16 +147,16 @@ function makeScreenRedrawer(outputStream) {
 // faces as one string, once the user has typed every roll and pressed Enter.
 //
 // Only use this when process.stdin.isTTY is true, meaning a real terminal.
-function collectDiceRollsInteractive(totalNumberOfRolls) {
+export function collectDiceRollsInteractive(totalNumberOfRolls: number): Promise<string> {
   return new Promise(function (resolve) {
     // The characters typed so far, such as ["4", "6", "2"].
-    const dieFacesTypedSoFar = [];
+    const dieFacesTypedSoFar: string[] = [];
     // Draws the grid in place each time we call it.
     const redraw = makeScreenRedrawer(process.stdout);
 
     // Puts the terminal back to normal and stops listening for keystrokes.
     // Forgetting this would leave the user's terminal in a strange state.
-    function stopListening() {
+    function stopListening(): void {
       process.stdin.setRawMode(false);
       process.stdin.pause();
       process.stdin.removeListener("keypress", handleKeystroke);
@@ -154,7 +165,10 @@ function collectDiceRollsInteractive(totalNumberOfRolls) {
     // Called once for every key the user presses. `typedCharacter` is the
     // character itself (may be undefined for special keys) and `keyDetails`
     // describes the key, such as { name: "backspace" } or { ctrl: true }.
-    function handleKeystroke(typedCharacter, keyDetails) {
+    function handleKeystroke(
+      typedCharacter: string | undefined,
+      keyDetails: KeyPressDetails | undefined
+    ): void {
       // Ctrl+C or Ctrl+D: give up, but restore the terminal on the way out.
       if (keyDetails && keyDetails.ctrl && (keyDetails.name === "c" || keyDetails.name === "d")) {
         stopListening();
@@ -219,11 +233,14 @@ function collectDiceRollsInteractive(totalNumberOfRolls) {
 
 // Reads one whole line of dice rolls, checks it, and asks again if it is not
 // valid. `waitForNextLine` is the line-waiting function built in
-// dice-to-seed.js; it throws if the input ends early, and that error is
+// dice-to-seed.ts; it throws if the input ends early, and that error is
 // deliberately left to travel up to the main program, which reports it and
 // exits with a failure code rather than pretending nothing happened.
 // Returns the die faces as one string, for example "6142...".
-async function collectDiceRollsFromLines(waitForNextLine, totalNumberOfRolls) {
+export async function collectDiceRollsFromLines(
+  waitForNextLine: WaitForNextLine,
+  totalNumberOfRolls: number
+): Promise<string> {
   while (true) {
     process.stdout.write(
       "Enter your " + totalNumberOfRolls + " dice rolls (digits 1-6, spaces optional): "
@@ -248,7 +265,7 @@ async function collectDiceRollsFromLines(waitForNextLine, totalNumberOfRolls) {
 
 // Collects the rolls whichever way suits the situation, and hands back the die
 // faces as text. `waitForNextLine` and `readlineInterface` come from
-// libs/prompts.js, where the earlier questions were asked.
+// libs/prompts.ts, where the earlier questions were asked.
 //
 // The awkward part this hides from the main program: the live grid reads
 // keystrokes from stdin directly, and a readline interface cannot be reading
@@ -256,7 +273,11 @@ async function collectDiceRollsFromLines(waitForNextLine, totalNumberOfRolls) {
 // be closed first. With piped input the opposite is true: everything may
 // already be sitting in that interface's queue, so it must be kept and reused,
 // or the dice-roll line would be lost.
-async function collectDiceRolls(numberOfRolls, waitForNextLine, readlineInterface) {
+export async function collectDiceRolls(
+  numberOfRolls: number,
+  waitForNextLine: WaitForNextLine,
+  readlineInterface: readline.Interface
+): Promise<string> {
   if (process.stdin.isTTY) {
     readlineInterface.close();
     console.log("Type each die face as you roll it - the grid below tracks your progress.\n");
@@ -269,10 +290,3 @@ async function collectDiceRolls(numberOfRolls, waitForNextLine, readlineInterfac
     readlineInterface.close();
   }
 }
-
-module.exports = {
-  buildGridLines,
-  collectDiceRollsInteractive,
-  collectDiceRollsFromLines,
-  collectDiceRolls,
-};

@@ -1,14 +1,12 @@
-// libs/output.js
+// libs/output.ts
 //
 // Everything the program prints. Keeping the wording here means the flow in
-// dice-to-seed.js stays readable as a flow, and it makes the safety advice
+// dice-to-seed.ts stays readable as a flow, and it makes the safety advice
 // easy to find, read and check in one place - it is as much a part of this
 // program as the maths is.
 
-"use strict";
-
 // A line of "=" the same width as the banner text below it.
-function printBanner() {
+export function printBanner(): void {
   console.log("======================================================================");
   console.log("dice-to-seed: offline BIP-39 seed phrase generator from dice rolls");
   console.log("======================================================================");
@@ -16,19 +14,19 @@ function printBanner() {
 
 // Shown when the user passed --skip-internet-check: the responsibility for
 // being offline is now entirely theirs, so say so plainly.
-function printInternetCheckSkipped() {
+export function printInternetCheckSkipped(): void {
   console.log("Skipping the internet check, as requested. Please make sure this");
   console.log("computer is actually disconnected from the internet before continuing.");
 }
 
 // Shown while the two connection probes are running (they take a moment).
-function printCheckingForInternet() {
+export function printCheckingForInternet(): void {
   console.log("Checking whether this computer is online, please wait...");
 }
 
 // Shown when a probe succeeded, i.e. this computer can reach the internet.
 // The program stops here: no dice are asked for, nothing is generated.
-function printOnlineRefusal() {
+export function printOnlineRefusal(): void {
   console.log("");
   console.log("This computer appears to be online. For your safety, please disconnect");
   console.log("from the internet (Wi-Fi, Ethernet, Bluetooth) and run this again.");
@@ -37,13 +35,13 @@ function printOnlineRefusal() {
 
 // Shown when both probes failed, i.e. this computer looks offline. Still worth
 // a reminder, because "looks offline" is not the same as "is offline".
-function printOfflineReminder() {
+export function printOfflineReminder(): void {
   console.log("No internet connection detected. For maximum safety, physically");
   console.log("disconnect this computer from all networks before continuing.");
 }
 
 // Prints the finished seed phrase, one numbered word per line.
-function printMnemonic(mnemonic) {
+export function printMnemonic(mnemonic: string): void {
   const words = mnemonic.split(" ");
   console.log("");
   console.log("Your seed phrase (" + words.length + " words):");
@@ -69,7 +67,10 @@ function printMnemonic(mnemonic) {
 // Instead the shape of the command is shown with a made-up example, which is
 // enough to type your own. The entropy IS printed, because you need it to
 // compare against - and it deserves exactly the same care as the words.
-function printHowToVerifyElsewhere(numberOfRolls, entropyHexText) {
+export function printHowToVerifyElsewhere(
+  numberOfRolls: number,
+  entropyHexText: string
+): void {
   console.log("");
   console.log("----------------------------------------------------------------------");
   console.log("Optional but recommended: check this seed phrase against another tool.");
@@ -105,19 +106,8 @@ function printHowToVerifyElsewhere(numberOfRolls, entropyHexText) {
 }
 
 // The last thing printed: what to do with what is now on the screen.
-function printFinalAdvice() {
+export function printFinalAdvice(): void {
   console.log("");
   console.log("Write this down on paper now. Do not store it digitally, screenshot it,");
   console.log("or type it anywhere else. Clear your terminal scrollback when done.");
 }
-
-module.exports = {
-  printBanner,
-  printInternetCheckSkipped,
-  printCheckingForInternet,
-  printOnlineRefusal,
-  printOfflineReminder,
-  printMnemonic,
-  printHowToVerifyElsewhere,
-  printFinalAdvice,
-};

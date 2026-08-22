@@ -1,4 +1,4 @@
-// libs/connectivity.js
+// libs/connectivity.ts
 //
 // A best-effort check that this computer is offline.
 //
@@ -16,16 +16,18 @@
 // runs before any dice rolls have been collected - so there is never anything
 // secret in memory for it to leak, even in principle.
 
-"use strict";
+import { createConnection } from "node:net";
 
-const net = require("node:net");
-
-function checkIfOneAddressIsReachable(address, port, timeoutInMilliseconds) {
+function checkIfOneAddressIsReachable(
+  address: string,
+  port: number,
+  timeoutInMilliseconds: number
+): Promise<boolean> {
   return new Promise(function (resolve) {
-    const connection = net.createConnection({ host: address, port: port });
+    const connection = createConnection({ host: address, port: port });
     let alreadyFinished = false;
 
-    function finish(isReachable) {
+    function finish(isReachable: boolean): void {
       if (alreadyFinished) {
         return;
       }
@@ -47,13 +49,9 @@ function checkIfOneAddressIsReachable(address, port, timeoutInMilliseconds) {
   });
 }
 
-async function isThisComputerOnline() {
+export async function isThisComputerOnline(): Promise<boolean> {
   const timeoutInMilliseconds = 3000;
   const cloudflareIsReachable = await checkIfOneAddressIsReachable("1.1.1.1", 443, timeoutInMilliseconds);
   const googleIsReachable = await checkIfOneAddressIsReachable("8.8.8.8", 443, timeoutInMilliseconds);
   return cloudflareIsReachable || googleIsReachable;
 }
-
-module.exports = {
-  isThisComputerOnline,
-};
